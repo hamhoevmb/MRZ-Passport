@@ -6,10 +6,10 @@ from parse_mrz import MRZ
 
 bottle.BaseRequest.MEMFILE_MAX = 10000 * 10000
 
-@app.route('/')
+@route('/hello')
 def index():
     return "Hello World, how are you?"
-    
+
 @route('/upload', method='POST')
 def do_upload():
     upload = request.files['image']

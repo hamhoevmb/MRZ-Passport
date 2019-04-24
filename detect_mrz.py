@@ -25,28 +25,27 @@ class MRZRecognizer():
 		gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 		gray = cv2.GaussianBlur(gray, (3, 3), 0)
 		blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, self.rectKernel)
-		cv2.imshow("blackhat", blackhat)
-		gradX = cv2.Sobel(blackhat, ddepth=cv2.CV_32F, dx=1, dy=0, ksize=-1)
-		gradX = np.absolute(gradX)
-		(minVal, maxVal) = (np.min(gradX), np.max(gradX))
-		gradX = (255 * ((gradX - minVal) / (maxVal - minVal))).astype("uint8")
-		gradX = cv2.morphologyEx(gradX, cv2.MORPH_CLOSE, self.rectKernel)
-		thresh = cv2.threshold(gradX, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-		thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, self.sqKernel)
-		thresh = cv2.erode(thresh, None, iterations=4)
+		gradientX = cv2.Sobel(blackhat, ddepth=cv2.CV_32F, dx=1, dy=0, ksize=-1)
+		gradientX = np.absolute(gradientX)
+		(minVal, maxVal) = (np.min(gradientX), np.max(gradientX))
+		gradientX = (255 * ((gradientX - minVal) / (maxVal - minVal))).astype("uint8")
+		gradientX = cv2.morphologyEx(gradientX, cv2.MORPH_CLOSE, self.rectKernel)
+		threshold = cv2.threshold(gradientX, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+		threshold = cv2.morphologyEx(threshold, cv2.MORPH_CLOSE, self.sqKernel)
+		threshold = cv2.erode(threshold, None, iterations=4)
 		p = int(image.shape[1] * 0.05)
-		thresh[:, 0:p] = 0
-		thresh[:, image.shape[1] - p:] = 0
-		cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-		cnts = imutils.grab_contours(cnts)
-		cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
-		for c in cnts:
+		threshold[:, 0:p] = 0
+		threshold[:, image.shape[1] - p:] = 0
+		contours = cv2.findContours(threshold.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		contours = imutils.grab_contours(contours)
+		contours = sorted(contours, key=cv2.contourArea, reverse=True)
+		for c in contours:
 			(x, y, w, h) = cv2.boundingRect(c)
 			ar = w / float(h)
 			crWidth = w / float(gray.shape[1])
-			if ar > 5 and crWidth > 0.75:
-				pX = int((x + w) * 0.03)
-				pY = int((y + h) * 0.03)
+			if ar > 6 and crWidth > 0.77:
+				pX = int((x + w) * 0.05)
+				pY = int((y + h) * 0.05)
 				(x, y) = (x - pX, y - pY)
 				(w, h) = (w + (pX * 2), h + (pY * 2))
 				roi = image[y:y + h, x:x + w].copy()
@@ -57,12 +56,12 @@ class MRZRecognizer():
 				opening = cv2.morphologyEx(filtered, cv2.MORPH_OPEN, kernel)
 				closing = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel)
 				img = self.image_smoothening(img)
-				or_image = cv2.bitwise_or(img, filtered)
+				or_image = cv2.bitwise_or(img, closing)
 				cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
 				break
 				
 		pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe'
-		text = pytesseract.image_to_string(img_grey,lang='eng', config=r'--oem 0 --psm 11 ')
+		text = pytesseract.image_to_string(or_image,lang='eng', config=r'--oem 0 --psm 11 ')
 		return text
 
 	def __call__(self, image_path):
