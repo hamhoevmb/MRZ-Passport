@@ -4,18 +4,19 @@ from datetime import datetime
 class MRZ(object):
     def __init__(self, mrz_lines):
         parsed_lines = self._split_lines(mrz_lines)
-        self._parse(parsed_lines)
+        self._parse_mrz(*parsed_lines)
         self.aux = {}
 
     def _split_lines(self, mrz_ocr_string): 
         return [ln for ln in mrz_ocr_string.replace(' ', '').split('\n') if (len(ln) >= 20 or '<<' in ln)]
 
-    def _parse(self, mrz_lines):
-        self.valid = self._parse_td3(*mrz_lines)
-
     def to_dict(self):
         result = OrderedDict()
-        result['valid_score'] = self.valid_score
+        result['check_number'] = self.check_number
+        result['check_date_of_birth'] = self.check_date_of_birth
+        result['check_expiration_date'] = self.check_expiration_date
+        result['check_composite'] = self.check_composite
+        result['check_personal_number'] = self.check_personal_number
         result['type'] = self.type
         result['country'] = self.country
         result['number'] = self.number
@@ -26,19 +27,15 @@ class MRZ(object):
         result['names'] = self.names
         result['surname'] = self.surname
         result['personal_number'] = self.personal_number
-        result['check_number'] = self.check_number
-        result['check_date_of_birth'] = self.check_date_of_birth
-        result['check_expiration_date'] = self.check_expiration_date
-        result['check_composite'] = self.check_composite
-        result['check_personal_number'] = self.check_personal_number
-        result['valid_number'] = self.valid_check_digits[0]
-        result['valid_date_of_birth'] = self.valid_check_digits[1]
-        result['valid_expiration_date'] = self.valid_check_digits[2]
-        result['valid_composite'] = self.valid_check_digits[3]
-        result['valid_personal_number'] = self.valid_check_digits[4]
+        result['valid_number'] = self.valid_number
+        result['valid_date_of_birth'] = self.valid_date_of_birth
+        result['valid_expiration_date'] = self.valid_expiration_date
+        result['valid_composite'] = self.valid_composite
+        result['valid_personal_number'] = self.valid_personal_number
+        result['valid_line_lengths'] = self.valid_line_lengths
         return result
 
-    def _parse_td3(self, a, b):
+    def _parse_mrz(self, a, b):
         len_a, len_b = len(a), len(b)
         if len(a) < 44:
             a = a + '<'*(44 - len(a))
@@ -50,8 +47,8 @@ class MRZ(object):
         if len(surname_names) < 2:
             surname_names += ['']
         self.surname, self.names = surname_names
-        self.names = MRZOCRTranslater.apply(self.names.replace('<', ' ').strip())
-        self.surname = MRZOCRTranslater.apply(self.surname.replace('<', ' ').strip())
+        self.names = MRZTranslater.apply(self.names.replace('<', ' ').strip())
+        self.surname = MRZTranslater.apply(self.surname.replace('<', ' ').strip())
         self.number = b[0:9]
         self.check_number = b[9]
         self.nationality = b[10:13]
@@ -63,19 +60,12 @@ class MRZ(object):
         self.personal_number = b[28:41]
         self.check_personal_number = b[42]
         self.check_composite = b[43]
-        self.valid_check_digits = [MRZCheckDigit.compute(self.number) == self.check_number,
-                                   MRZCheckDigit.compute(self.date_of_birth) == self.check_date_of_birth and MRZ._check_date(self.date_of_birth),
-                                   ((self.check_expiration_date == '<' or self.check_expiration_date == '0') and self.expiration_date == '<<<<<<') or
-                                   MRZCheckDigit.compute(self.expiration_date) == self.check_expiration_date and MRZ._check_date(self.expiration_date),
-                                   MRZCheckDigit.compute(b[0:10] + b[13:20] + b[21:43]) == self.check_composite,
-                                   ((self.check_personal_number == '<' or self.check_personal_number == '0') and self.personal_number == '<<<<<<<<<<<<<<')
-                                   or MRZCheckDigit.compute(self.personal_number) == self.check_personal_number]
         self.valid_line_lengths = [len_a == 44, len_b == 44]
-        self.valid_misc = [a[0] in 'P']
-        self.valid_score = 10*sum(self.valid_check_digits) + sum(self.valid_line_lengths) + sum(self.valid_misc) +1
-        self.valid_score = 100*self.valid_score//(50+2+1+1)
-        self.valid_number, self.valid_date_of_birth, self.valid_expiration_date, self.valid_personal_number, self.valid_composite = self.valid_check_digits
-        return self.valid_score == 100
+        self.valid_number = MRZCheckDigit.compute(self.number) == self.check_number
+        self.valid_date_of_birth = MRZCheckDigit.compute(self.date_of_birth) == self.check_date_of_birth and MRZ._check_date(self.date_of_birth)
+        self.valid_expiration_date = ((self.check_expiration_date == '<' or self.check_expiration_date == '0') and self.expiration_date == '<<<<<<') or MRZCheckDigit.compute(self.expiration_date) == self.check_expiration_date and MRZ._check_date(self.expiration_date)
+        self.valid_personal_number = MRZCheckDigit.compute(b[0:10] + b[13:20] + b[21:43]) == self.check_composite
+        self.valid_composite = ((self.check_personal_number == '<' or self.check_personal_number == '0') and self.personal_number == '<<<<<<<<<<<<<<') or MRZCheckDigit.compute(self.personal_number) == self.check_personal_number
 
     @staticmethod
     def _check_date(ymd):
@@ -87,18 +77,18 @@ class MRZ(object):
 
 class MRZCheckDigit(object):
     def __init__(self):
-        self.CHECK_CODES = dict()
+        self.codes_dictionary = dict()
         for i in range(10):
-            self.CHECK_CODES[str(i)] = i
+            self.codes_dictionary[str(i)] = i
         for i in range(ord('A'), ord('Z')+1):
-            self.CHECK_CODES[chr(i)] = i - 55
-        self.CHECK_CODES['<'] = 0
-        self.CHECK_WEIGHTS = [7, 3, 1]
+            self.codes_dictionary[chr(i)] = i - 55
+        self.codes_dictionary['<'] = 0
+        self.weights = [7, 3, 1]
 
     def __call__(self, txt):
         if txt == '':
             return ''
-        res = sum([self.CHECK_CODES.get(c, -1000)*self.CHECK_WEIGHTS[i % 3] for i, c in enumerate(txt)])
+        res = sum([self.codes_dictionary.get(c, -1000)*self.weights[i % 3] for i, c in enumerate(txt)])
         if res < 0:
             return ''
         else:
@@ -110,7 +100,7 @@ class MRZCheckDigit(object):
             MRZCheckDigit.__instance__ = MRZCheckDigit()
         return MRZCheckDigit.__instance__(txt)
 
-class MRZOCRTranslater(object):
+class MRZTranslater(object):
     def __init__(self):
         self.eng_to_rus = {'A':'A','B':'Б', 'V':'В', 'G':'Г','D':'Д','E':'Е','2':'Ё','J':'Ж','Z':'З','I':'И','Q':'Й','K':'К','L':'Л','M':'М','N':'Н','O':'О','P':'П','R':'Р','S':'С','T':'Т','U':'У','F':'Ф','H':'Х','C':'Ц','3':'Ч','4':'Ш','W':'Щ', 'X':'Ъ', 'Y':'Ы','6':'Э','7':'Ю','8':'Я', '9':'Ь'}
 
@@ -122,6 +112,6 @@ class MRZOCRTranslater(object):
 
     @staticmethod
     def apply(txt):
-        if getattr(MRZOCRTranslater, '__instance__', None) is None:
-            MRZOCRTranslater.__instance__ = MRZOCRTranslater()
-        return MRZOCRTranslater.__instance__(txt)
+        if getattr(MRZTranslater, '__instance__', None) is None:
+            MRZTranslater.__instance__ = MRZTranslater()
+        return MRZTranslater.__instance__(txt)
