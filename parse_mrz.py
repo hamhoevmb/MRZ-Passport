@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
 from collections import OrderedDict
 from datetime import datetime
 
@@ -103,7 +105,7 @@ class MRZCheckDigit(object):
 class MRZTranslater(object):
     def __init__(self):
         self.eng_to_rus = {'A':'A','B':'Б', 'V':'В', 'G':'Г','D':'Д','E':'Е','2':'Ё','J':'Ж','Z':'З','I':'И','Q':'Й','K':'К','L':'Л','M':'М','N':'Н','O':'О','P':'П','R':'Р','S':'С','T':'Т','U':'У','F':'Ф','H':'Х','C':'Ц','3':'Ч','4':'Ш','W':'Щ', 'X':'Ъ', 'Y':'Ы','6':'Э','7':'Ю','8':'Я', '9':'Ь'}
-
+    
     def __call__(self, mrz_ocr_string):
         line = list(mrz_ocr_string)
         for i in range(len(line)):

@@ -22,4 +22,4 @@ def do_upload():
     json = parsed_text.to_dict()
     return json
 
-run(host='localhost', port=8085, debug=True)
+run(host='localhost', port=8085)
